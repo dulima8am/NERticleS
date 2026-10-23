@@ -1,6 +1,10 @@
 import os
+from dotenv import load_dotenv
 from google import genai
 import httpx
+
+# Cargar variables de entorno al inicio del módulo
+load_dotenv()
 
 class LLMService:
     def __init__(self):
@@ -29,7 +33,7 @@ class LLMService:
             
             # Llamada a AI Studio
             response = self.ai_studio_client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.8-flash',
                 contents=prompt
             )
             
