@@ -11,7 +11,7 @@ class LLMService:
         
         # Inicializamos Vertex AI una sola vez
         vertexai.init(project=self.project_id, location=self.location)
-        self.vertex_model = GenerativeModel("gemini-1.5-flash") # Usamos Flash por ser más barato/rápido
+        self.vertex_model = GenerativeModel("gemini-2.5-flash") # Usamos Flash por ser más barato/rápido
         
         # Configuración de Ollama (Local Fallback)
         self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
