@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import load_dotenv
 from google import genai
 import httpx
@@ -22,14 +23,21 @@ class LLMService:
         self.cost_threshold = float(os.getenv("COST_THRESHOLD", "0.002"))
 
     async def analyze_text(self, text: str) -> dict:
-        """
-        Analiza el texto usando Google AI Studio. Si falla o excede el umbral,
-        hace fallback a Ollama.
-        """
         try:
             print("[LLM Service] 🔵 Intentando con Google AI Studio (Gemini)...")
             
-            prompt = f"Analiza el siguiente texto periodístico y extrae: 1) Entidades principales (NER), 2) Sentimiento general (Positivo/Negativo/Neutral), 3) Un resumen SEO de máximo 160 caracteres.\n\nTexto: {text}"
+            prompt = f"""
+Analiza el siguiente texto periodístico y devuelve ÚNICAMENTE un objeto JSON válido.
+NO uses markdown, NO uses bloques de código (```), NO agregues texto antes ni después.
+La estructura exacta debe ser:
+{{
+  "entidades": ["entidad1", "entidad2"],
+  "sentimiento": "Positivo" | "Negativo" | "Neutral",
+  "resumen_seo": "Resumen de máximo 160 caracteres"
+}}
+
+Texto: {text}
+"""
             
             # Llamada a AI Studio
             response = self.ai_studio_client.models.generate_content(
@@ -38,16 +46,23 @@ class LLMService:
             )
             
             # Cálculo de costo simulado
-            estimated_cost = 0.0001 
+            estimated_cost = 0.0001
             
             if estimated_cost > self.cost_threshold:
-                print(f"[LLM Service] ⚠️ Costo estimado supera el umbral. Forzando Fallback a Ollama...")
+                print("[LLM Service] ⚠️ Costo supera el umbral. Forzando Fallback a Ollama...")
                 return await self._fallback_to_ollama(text)
+            
+            # Parseo seguro del JSON (por si Gemini devuelve ```json ... ```)
+            raw_text = response.text.strip()
+            if raw_text.startswith("```"):
+                raw_text = raw_text.strip("`").replace("json\n", "", 1).strip()
+            
+            parsed_result = json.loads(raw_text)
             
             return {
                 "provider": "google_ai_studio",
                 "cost": estimated_cost,
-                "result": response.text
+                "result": parsed_result
             }
 
         except Exception as e:
@@ -55,19 +70,14 @@ class LLMService:
             return await self._fallback_to_ollama(text)
 
     async def _fallback_to_ollama(self, text: str) -> dict:
-        """
-        Método privado para conectar con Ollama local.
-        (Este método se mantiene exactamente igual que antes)
-        """
         print("[LLM Service] 🟢 Usando Ollama local como Fallback...")
         
-        prompt = f"Analiza el siguiente texto y extrae: 1) Entidades, 2) Sentimiento, 3) Resumen SEO (max 160 chars).\n\nTexto: {text}"
-        
-        payload = {
-            "model": self.ollama_model,
-            "prompt": prompt,
-            "stream": False
-        }
+        prompt = f"""
+Analiza el siguiente texto y devuelve ÚNICAMENTE un JSON válido con esta estructura:
+{{"entidades": [], "sentimiento": "", "resumen_seo": ""}}
+Texto: {text}
+"""
+        payload = {"model": self.ollama_model, "prompt": prompt, "stream": False}
 
         try:
             async with httpx.AsyncClient() as client:
@@ -75,17 +85,20 @@ class LLMService:
                 response.raise_for_status()
                 data = response.json()
                 
+                raw_text = data.get("response", "").strip()
+                if raw_text.startswith("```"):
+                    raw_text = raw_text.strip("`").replace("json\n", "", 1).strip()
+                
                 return {
                     "provider": "ollama_local",
                     "cost": 0.0,
-                    "result": data.get("response", "")
+                    "result": json.loads(raw_text)
                 }
         except Exception as e:
             return {
                 "provider": "error",
                 "cost": 0.0,
-                "result": f"Error crítico: AI Studio falló y Ollama no está disponible. Detalle: {e}"
+                "result": {"error": f"Fallo total: {e}"}
             }
 
-# Instancia global para usarla en el pipeline
 llm_service = LLMService()
