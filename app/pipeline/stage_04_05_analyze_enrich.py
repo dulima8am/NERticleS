@@ -1,4 +1,7 @@
 from app.services.llm_service import llm_service
+from app.utils.observability import observe_stage
+
+@observe_stage("etapa_04_05_analisis_llm")
 
 async def analyze_and_enrich(cleaned_text: str) -> dict:
     """

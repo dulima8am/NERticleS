@@ -1,6 +1,10 @@
 import re
 import html
 
+from app.utils.observability import observe_stage
+
+@observe_stage("etapa_03_limpieza")
+
 def clean_text(raw_text: str) -> str:
     """
     Etapa 03: Limpiar el texto.

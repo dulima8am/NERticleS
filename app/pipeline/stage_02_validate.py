@@ -1,5 +1,8 @@
 from app.models.schemas import ArticleIngestSchema
 
+from app.utils.observability import observe_stage
+
+@observe_stage("etapa_02_validar_articulo")
 def validate_article(article: ArticleIngestSchema) -> bool:
     """
     Etapa 02: Validar reglas de negocio.
