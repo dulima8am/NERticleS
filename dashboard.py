@@ -65,6 +65,7 @@ else:
 
 st.sidebar.divider()
 
+# --- BARRA LATERAL: Enviar Artículo ---
 st.sidebar.header("📥 Analizar Nueva URL")
 with st.sidebar.form("url_form"):
     art_url = st.text_input("Ingresa la URL del artículo", placeholder="https://www.semana.com/...")
@@ -76,31 +77,34 @@ with st.sidebar.form("url_form"):
         elif not art_url.startswith("http"):
             st.error("Por favor, ingresa una URL válida.")
         else:
-            with st.spinner("Extrayendo contenido de la URL..."):
+            # 1. Extraemos el título (esto es rápido)
+            with st.spinner("Extrayendo contenido..."):
                 title, content_or_error = extract_article_data(art_url)
+            
+            if title is None:
+                st.error(f"❌ Error al extraer: {content_or_error}")
+            else:
+                art_id = f"art-{uuid.uuid4().hex[:8]}"
+                headers = {"Authorization": f"Bearer {st.session_state.token}"}
+                payload = {
+                    "id": art_id,
+                    "url": art_url,
+                    "title": title,
+                    "content": f"<p>{content_or_error}</p>"
+                }
                 
-                if title is None:
-                    st.error(f"❌ Error al extraer: {content_or_error}")
-                else:
-                    art_id = f"art-{uuid.uuid4().hex[:8]}"
-                    headers = {"Authorization": f"Bearer {st.session_state.token}"}
-                    payload = {
-                        "id": art_id,
-                        "url": art_url,
-                        "title": title,
-                        "content": f"<p>{content_or_error}</p>"
-                    }
-                    
-                    try:
-                        response = requests.post(f"{API_URL}/webhook/articles", json=payload, headers=headers)
-                        if response.status_code == 202:
-                            st.success(f"✅ Artículo enviado. Procesando...")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error(f"Error del servidor: {response.status_code}")
-                    except Exception as e:
-                        st.error(f"Error de conexión: {e}")
+                # 2. Enviamos al backend (esto es rápido porque usa BackgroundTasks)
+                try:
+                    response = requests.post(f"{API_URL}/webhook/articles", json=payload, headers=headers)
+                    if response.status_code == 202:
+                        # 3. Refrescamos INMEDIATAMENTE para que aparezca en la tabla
+                        st.success(f"✅ '{title[:30]}...' en cola de procesamiento.")
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error(f"Error del servidor: {response.status_code}")
+                except Exception as e:
+                    st.error(f"Error de conexión: {e}")
 
 # --- ÁREA PRINCIPAL: Visualización en Vivo ---
 st.header("📊 Resultados del Pipeline (Actualización en vivo)")
@@ -160,11 +164,8 @@ with placeholder.container():
             # --- LÓGICA DE SELECCIÓN ---
             st.divider()
             if len(selection.selection.rows) > 0:
-                # Obtenemos el índice de la fila seleccionada
                 selected_index = selection.selection.rows[0]
-                # Buscamos el ID del artículo en el DataFrame original
                 selected_id = df_display.iloc[selected_index]['ID']
-                # Buscamos la fila completa en el df original
                 row_data = df[df['id'] == selected_id].iloc[0]
                 
                 st.subheader(f"📝 Detalle del Artículo: {row_data['title']}")
@@ -172,10 +173,10 @@ with placeholder.container():
                 # Mostrar resumen SEO en un párrafo bonito
                 st.info(f"**Resumen SEO:** {row_data['resumen_seo']}")
                 
-                # Opcional: Mostrar el enlace original
+                # Mostrar el enlace original
                 st.markdown(f"🔗 [Ver artículo original]({row_data['url']})")
                 
-                # Opcional: Mostrar entidades en formato JSON crudo (por si acaso)
+                # Mostrar entidades en formato JSON crudo (por si acaso)
                 with st.expander("Ver datos técnicos (JSON de entidades)"):
                     st.json(row_data['entidades'])
             else:
