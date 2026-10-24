@@ -37,3 +37,53 @@ El sistema implementa un flujo secuencial de 7 etapas, diseñado para procesar a
    ```bash
    python -m venv venv
    source venv/bin/activate
+   
+2. Instalar las dependencias.
+Con el entorno virtual activado, ejecuta:
+
+	```bash
+	pip install -r requirements.txt
+
+3. Configurar las variables de entorno.
+Crea un archivo llamado .env en la raíz del proyecto y agrega tu configuración:
+
+text
+GEMINI_API_KEY="tu_api_key_aqui"
+GEMINI_MODEL="gemini-2.5-flash"
+OLLAMA_URL="http://localhost:11434/api/generate"
+OLLAMA_MODEL="llama3.2:3b"
+COST_THRESHOLD="0.002"
+
+4. Levantar el servidor.
+Inicia la aplicación con Uvicorn:
+
+	```bash
+	uvicorn app.main:app --reload
+	
+5. Acceder a la documentación.
+Abre tu navegador y visita la interfaz de Swagger UI en: http://127.0.0.1:8000/docs
+
+🧪 Pruebas y Uso
+Para probar el pipeline, envía una petición POST al webhook con la estructura de un artículo:
+
+json
+{
+  "id": "art-001",
+  "url": "https://ejemplo.com/noticia",
+  "title": "Título de la noticia",
+  "content": "<p>Contenido del artículo con al menos 50 palabras para pasar la validación...</p>"
+}
+El servidor responderá con un 202 Accepted y los resultados se podrán consultar en la base de datos.
+
+☁️ Despliegue en Cloud Run (GCP)
+El proyecto incluye un Dockerfile optimizado para desplegarse en Google Cloud Run. Para hacerlo, asegúrate de tener configurado el gcloud CLI y ejecuta:
+
+bash
+gcloud run deploy nerticles-pipeline \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars="GEMINI_MODEL=gemini-3.8-flash,OLLAMA_URL=http://localhost:11434/api/generate,OLLAMA_MODEL=llama3.2:3b,COST_THRESHOLD=0.002"
+(Nota: En producción, la GEMINI_API_KEY debe configurarse a través de Google Secret Manager y no como una variable de entorno plana).
+
+Proyecto desarrollado para el Programa Certified AI-LLM Integration Engineer - Curso de Fundamentos de LLMs y APIs (BSG Institute).
