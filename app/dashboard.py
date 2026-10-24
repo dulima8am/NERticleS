@@ -98,13 +98,13 @@ with st.sidebar.form("url_form"):
                         response = requests.post(f"{API_URL}/webhook/articles", json=payload, headers=headers)
                         if response.status_code == 202:
                             st.success(f"✅ Artículo '{title[:30]}...' enviado. Procesando...")
-                            time.sleep(3) # Esperar un poco para que el LLM procese
+                            time.sleep(3)
                             st.rerun()
                         else:
                             st.error(f"Error del servidor: {response.status_code} - {response.text}")
                     except Exception as e:
                         st.error(f"Error de conexión con el backend: {e}")
-
+                        
 # --- ÁREA PRINCIPAL: Visualización de Datos ---
 st.header("📊 Resultados del Pipeline")
 
