@@ -1,31 +1,37 @@
-import os
 import json
-from dotenv import load_dotenv
-from google import genai
 import httpx
+from google import genai
+from app.core.config import settings
 
-# Cargar variables de entorno al inicio del módulo
-load_dotenv()
 
 class LLMService:
     def __init__(self):
-        # Configuración de Google AI Studio (Gemini API)
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("Falta la variable de entorno GEMINI_API_KEY")
-        self.ai_studio_client = genai.Client(api_key=api_key)
+        # Validar que la API key exista al arrancar
+        if not settings.GEMINI_API_KEY:
+            raise ValueError("Falta la variable de entorno GEMINI_API_KEY en el archivo .env")
         
-        # Configuración de Ollama (Local Fallback)
-        self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
-        self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3:8b")
+        # Cliente de Google AI Studio
+        self.ai_studio_client = genai.Client(api_key=settings.GEMINI_API_KEY)
         
-        # Umbral de costo (simulado)
-        self.cost_threshold = float(os.getenv("COST_THRESHOLD", "0.002"))
+        # Configuración del modelo principal (viene de config.py)
+        self.gemini_model = settings.GEMINI_MODEL
+        
+        # Configuración del Fallback (Ollama)
+        self.ollama_url = settings.OLLAMA_URL
+        self.ollama_model = settings.OLLAMA_MODEL
+        
+        # Umbral de costo para activar el fallback
+        self.cost_threshold = settings.COST_THRESHOLD
 
     async def analyze_text(self, text: str) -> dict:
+        """
+        Analiza el texto usando Google AI Studio (Gemini).
+        Si falla o excede el umbral de costo, hace fallback a Ollama.
+        """
         try:
             print("[LLM Service] 🔵 Intentando con Google AI Studio (Gemini)...")
             
+            # Prompt estricto para forzar un JSON limpio
             prompt = f"""
 Analiza el siguiente texto periodístico y devuelve ÚNICAMENTE un objeto JSON válido.
 NO uses markdown, NO uses bloques de código (```), NO agregues texto antes ni después.
@@ -39,17 +45,18 @@ La estructura exacta debe ser:
 Texto: {text}
 """
             
-            # Llamada a AI Studio
+            # Llamada al modelo
             response = self.ai_studio_client.models.generate_content(
-                model='gemini-3.8-flash',
+                model=self.gemini_model,
                 contents=prompt
             )
             
-            # Cálculo de costo simulado
+            # Costo estimado (simulado para el proyecto)
             estimated_cost = 0.0001
             
+            # Verificación del umbral de costo (Diferenciador del Proyecto B)
             if estimated_cost > self.cost_threshold:
-                print("[LLM Service] ⚠️ Costo supera el umbral. Forzando Fallback a Ollama...")
+                print(f"[LLM Service] ⚠️ Costo estimado (${estimated_cost}) supera el umbral (${self.cost_threshold}). Forzando Fallback a Ollama...")
                 return await self._fallback_to_ollama(text)
             
             # Parseo seguro del JSON (por si Gemini devuelve ```json ... ```)
@@ -70,6 +77,9 @@ Texto: {text}
             return await self._fallback_to_ollama(text)
 
     async def _fallback_to_ollama(self, text: str) -> dict:
+        """
+        Método privado para conectar con Ollama local como respaldo.
+        """
         print("[LLM Service] 🟢 Usando Ollama local como Fallback...")
         
         prompt = f"""
@@ -77,7 +87,11 @@ Analiza el siguiente texto y devuelve ÚNICAMENTE un JSON válido con esta estru
 {{"entidades": [], "sentimiento": "", "resumen_seo": ""}}
 Texto: {text}
 """
-        payload = {"model": self.ollama_model, "prompt": prompt, "stream": False}
+        payload = {
+            "model": self.ollama_model,
+            "prompt": prompt,
+            "stream": False
+        }
 
         try:
             async with httpx.AsyncClient() as client:
@@ -91,14 +105,16 @@ Texto: {text}
                 
                 return {
                     "provider": "ollama_local",
-                    "cost": 0.0,
+                    "cost": 0.0,  # Ollama es gratis
                     "result": json.loads(raw_text)
                 }
         except Exception as e:
             return {
                 "provider": "error",
                 "cost": 0.0,
-                "result": {"error": f"Fallo total: {e}"}
+                "result": {"error": f"Fallo total: Vertex AI/AI Studio y Ollama no disponibles. Detalle: {e}"}
             }
 
+
+# Instancia global para usarla en el pipeline
 llm_service = LLMService()
