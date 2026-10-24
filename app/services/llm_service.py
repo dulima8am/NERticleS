@@ -9,17 +9,17 @@ class LLMService:
         # Validar que la API key exista al arrancar
         if not settings.GEMINI_API_KEY:
             raise ValueError("Falta la variable de entorno GEMINI_API_KEY en el archivo .env")
-        
+
         # Cliente de Google AI Studio
         self.ai_studio_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        
+
         # Configuración del modelo principal (viene de config.py)
         self.gemini_model = settings.GEMINI_MODEL
-        
+
         # Configuración del Fallback (Ollama)
         self.ollama_url = settings.OLLAMA_URL
         self.ollama_model = settings.OLLAMA_MODEL
-        
+
         # Umbral de costo para activar el fallback
         self.cost_threshold = settings.COST_THRESHOLD
 
@@ -30,11 +30,10 @@ class LLMService:
         """
         try:
             print("[LLM Service] 🔵 Intentando con Google AI Studio (Gemini)...")
-            
-            # Prompt estricto para forzar un JSON limpio
+
             prompt = f"""
 Analiza el siguiente texto periodístico y devuelve ÚNICAMENTE un objeto JSON válido.
-NO uses markdown, NO uses bloques de código (```), NO agregues texto antes ni después.
+NO uses markdown, NO uses bloques de código, NO agregues texto antes ni después.
 La estructura exacta debe ser:
 {{
   "entidades": ["entidad1", "entidad2"],
@@ -44,28 +43,24 @@ La estructura exacta debe ser:
 
 Texto: {text}
 """
-            
-            # Llamada al modelo
+
             response = self.ai_studio_client.models.generate_content(
                 model=self.gemini_model,
                 contents=prompt
             )
-            
-            # Costo estimado (simulado para el proyecto)
+
             estimated_cost = 0.0001
-            
-            # Verificación del umbral de costo (Diferenciador del Proyecto B)
+
             if estimated_cost > self.cost_threshold:
                 print(f"[LLM Service] ⚠️ Costo estimado (${estimated_cost}) supera el umbral (${self.cost_threshold}). Forzando Fallback a Ollama...")
                 return await self._fallback_to_ollama(text)
-            
-            # Parseo seguro del JSON (por si Gemini devuelve ```json ... ```)
+
             raw_text = response.text.strip()
             if raw_text.startswith("```"):
                 raw_text = raw_text.strip("`").replace("json\n", "", 1).strip()
-            
+
             parsed_result = json.loads(raw_text)
-            
+
             return {
                 "provider": "google_ai_studio",
                 "cost": estimated_cost,
@@ -76,9 +71,12 @@ Texto: {text}
             print(f"[LLM Service] ❌ Error con AI Studio: {e}. Iniciando Fallback a Ollama...")
             return await self._fallback_to_ollama(text)
 
-        async def _fallback_to_ollama(self, text: str) -> dict:
+    async def _fallback_to_ollama(self, text: str) -> dict:
+        """
+        Método privado para conectar con Ollama local como respaldo.
+        """
         print("[LLM Service] 🟢 Usando Ollama local como Fallback...")
-        
+
         prompt = f"""You are a JSON generator. Respond ONLY with a valid JSON object. No explanations, no markdown, no code blocks.
 
 The JSON must have exactly these keys:
@@ -90,7 +88,7 @@ Text to analyze:
 {text}
 
 JSON response:"""
-        
+
         payload = {
             "model": self.ollama_model,
             "prompt": prompt,
@@ -103,12 +101,12 @@ JSON response:"""
                 response = await client.post(self.ollama_url, json=payload, timeout=60.0)
                 response.raise_for_status()
                 data = response.json()
-                
+
                 raw_text = data.get("response", "").strip()
-                
+
                 if raw_text.startswith("```"):
                     raw_text = raw_text.strip("`").replace("json\n", "", 1).strip()
-                
+
                 return {
                     "provider": "ollama_local",
                     "cost": 0.0,
