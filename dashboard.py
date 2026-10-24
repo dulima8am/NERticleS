@@ -4,8 +4,8 @@ import sqlite3
 import pandas as pd
 import time
 import uuid
+import json
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse
 
 # Configuración de la página
 st.set_page_config(page_title="NERticleS Dashboard", page_icon="📰", layout="wide")
@@ -26,14 +26,13 @@ def extract_article_data(url):
         
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Intentar extraer el título
+        # Extraer título
         title = soup.title.string if soup.title else "Sin título"
         
-        # Intentar extraer el contenido (buscando etiquetas <p>)
+        # Extraer contenido (párrafos)
         paragraphs = soup.find_all('p')
         content = " ".join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 20])
         
-        # Si no encontramos suficiente texto en <p>, usamos todo el body
         if len(content) < 100:
             content = soup.get_text(separator=' ', strip=True)
             
@@ -53,6 +52,7 @@ if st.session_state.token is None:
             if response.status_code == 200:
                 st.session_state.token = response.json()["access_token"]
                 st.sidebar.success("✅ Login exitoso")
+                st.rerun()
             else:
                 st.sidebar.error("❌ Error en login")
         except Exception as e:
@@ -65,7 +65,6 @@ else:
 
 st.sidebar.divider()
 
-# --- BARRA LATERAL: Enviar Artículo (Solo URL) ---
 st.sidebar.header("📥 Analizar Nueva URL")
 with st.sidebar.form("url_form"):
     art_url = st.text_input("Ingresa la URL del artículo", placeholder="https://www.semana.com/...")
@@ -75,17 +74,15 @@ with st.sidebar.form("url_form"):
         if st.session_state.token is None:
             st.error("Debes hacer login primero.")
         elif not art_url.startswith("http"):
-            st.error("Por favor, ingresa una URL válida que empiece con http:// o https://")
+            st.error("Por favor, ingresa una URL válida.")
         else:
             with st.spinner("Extrayendo contenido de la URL..."):
                 title, content_or_error = extract_article_data(art_url)
                 
                 if title is None:
-                    st.error(f"❌ Error al extraer el artículo: {content_or_error}")
+                    st.error(f"❌ Error al extraer: {content_or_error}")
                 else:
-                    # Generar ID único automáticamente
                     art_id = f"art-{uuid.uuid4().hex[:8]}"
-                    
                     headers = {"Authorization": f"Bearer {st.session_state.token}"}
                     payload = {
                         "id": art_id,
@@ -97,28 +94,24 @@ with st.sidebar.form("url_form"):
                     try:
                         response = requests.post(f"{API_URL}/webhook/articles", json=payload, headers=headers)
                         if response.status_code == 202:
-                            st.success(f"✅ Artículo '{title[:30]}...' enviado. Procesando...")
-                            time.sleep(3) # Esperar un poco para que el LLM procese
+                            st.success(f"✅ Artículo enviado. Procesando...")
+                            time.sleep(1)
                             st.rerun()
                         else:
-                            st.error(f"Error del servidor: {response.status_code} - {response.text}")
+                            st.error(f"Error del servidor: {response.status_code}")
                     except Exception as e:
-                        st.error(f"Error de conexión con el backend: {e}")
+                        st.error(f"Error de conexión: {e}")
 
-# --- ÁREA PRINCIPAL: Visualización de Datos ---
-import time
-from datetime import datetime
+# --- ÁREA PRINCIPAL: Visualización en Vivo ---
+st.header("📊 Resultados del Pipeline (Actualización en vivo)")
 
-st.header("📊 Resultados del Pipeline")
-
-# Creamos un contenedor vacío que se actualizará
+# Contenedor para actualización automática
 placeholder = st.empty()
 
-# Bucle infinito para actualización en vivo (se detiene si recargas la página)
 with placeholder.container():
     try:
         conn = sqlite3.connect("pipeline.db")
-        # Ordenamos por fecha descendente (más reciente primero)
+        # Ordenar por fecha descendente (más reciente primero)
         df = pd.read_sql_query("SELECT * FROM articles_processed ORDER BY processed_at DESC", conn)
         conn.close()
         
@@ -128,31 +121,40 @@ with placeholder.container():
             # Métricas
             col1, col2, col3 = st.columns(3)
             col1.metric("Total Artículos", len(df))
-            col2.metric("Sentimiento Predominante", df[df['status']=='Procesado']['sentimiento'].mode()[0] if not df[df['status']=='Procesado'].empty else "N/A")
-            col3.metric("Proveedor Principal", df[df['status']=='Procesado']['provider'].mode()[0] if not df[df['status']=='Procesado'].empty else "N/A")
+            
+            # Sentimiento más común (solo de los procesados)
+            df_procesados = df[df['sentimiento'] != 'En análisis']
+            sentimiento_comun = df_procesados['sentimiento'].mode()[0] if not df_procesados.empty else "N/A"
+            col2.metric("Sentimiento Predominante", sentimiento_comun)
+            
+            proveedor_comun = df_procesados['provider'].mode()[0] if not df_procesados.empty else "N/A"
+            col3.metric("Proveedor Principal", proveedor_comun)
             
             st.divider()
             
-            # Tabla de artículos
+            # Tabla
             st.subheader("📋 Artículos Recientes")
             
-            # Procesamos el JSON de entidades para que se vea como una lista separada por comas
-            df['entidades_str'] = df['entidades'].apply(lambda x: ", ".join(json.loads(x)) if x and x != "[]" else "")
+            # Convertir JSON de entidades a string legible
+            def parse_entities(x):
+                try:
+                    if x and x != "[]":
+                        return ", ".join(json.loads(x))
+                    return ""
+                except:
+                    return ""
             
-            df_display = df[['id', 'title', 'status', 'provider', 'sentimiento', 'entidades_str', 'resumen_seo', 'processed_at']].copy()
-            df_display.columns = ['ID', 'Título', 'Estado', 'Proveedor', 'Sentimiento', 'Entidades', 'Resumen SEO', 'Fecha']
+            df['entidades_str'] = df['entidades'].apply(parse_entities)
             
-            # Formateamos la fecha para que se vea bonita
-            df_display['Fecha'] = pd.to_datetime(df_display['Fecha']).dt.strftime('%H:%M:%S')
+            df_display = df[['id', 'title', 'provider', 'sentimiento', 'entidades_str', 'resumen_seo']].copy()
+            df_display.columns = ['ID', 'Título', 'Proveedor', 'Sentimiento', 'Entidades', 'Resumen SEO']
             
-            st.dataframe(df_display, use_container_width=True)
+            # Mostrar tabla
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
             
     except Exception as e:
         st.error(f"Error al leer la base de datos: {e}")
 
-# Aquí está la magia: esperamos 3 segundos y recargamos la página
+# Pausa de 3 segundos y recarga automática para simular "tiempo real"
 time.sleep(3)
 st.rerun()
-
-except Exception as e:
-    st.error(f"Error al leer la base de datos: {e}")
