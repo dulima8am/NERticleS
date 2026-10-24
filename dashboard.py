@@ -106,41 +106,53 @@ with st.sidebar.form("url_form"):
                         st.error(f"Error de conexión con el backend: {e}")
 
 # --- ÁREA PRINCIPAL: Visualización de Datos ---
+import time
+from datetime import datetime
+
 st.header("📊 Resultados del Pipeline")
 
-try:
-    # Conectar a la base de datos SQLite
-    conn = sqlite3.connect("pipeline.db")
-    
-    # Leer los datos
-    df = pd.read_sql_query("SELECT * FROM articles_processed ORDER BY processed_at DESC", conn)
-    conn.close()
-    
-    if df.empty:
-        st.info("Aún no hay artículos procesados. Usa el panel izquierdo para enviar una URL.")
-    else:
-        # Mostrar métricas principales
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Artículos", len(df))
-        col2.metric("Sentimiento Predominante", df['sentimiento'].mode()[0] if not df.empty else "N/A")
-        col3.metric("Proveedor Principal", df['provider'].mode()[0] if not df.empty else "N/A")
+# Creamos un contenedor vacío que se actualizará
+placeholder = st.empty()
+
+# Bucle infinito para actualización en vivo (se detiene si recargas la página)
+with placeholder.container():
+    try:
+        conn = sqlite3.connect("pipeline.db")
+        # Ordenamos por fecha descendente (más reciente primero)
+        df = pd.read_sql_query("SELECT * FROM articles_processed ORDER BY processed_at DESC", conn)
+        conn.close()
         
-        st.divider()
-        
-        # Mostrar tabla de datos
-        st.subheader("📋 Artículos Recientes")
-        
-        df_display = df[['id', 'title', 'provider', 'sentimiento', 'resumen_seo', 'processed_at']].copy()
-        df_display.columns = ['ID', 'Título', 'Proveedor', 'Sentimiento', 'Resumen SEO', 'Fecha de Procesamiento']
-        
-        st.dataframe(df_display, use_container_width=True)
-        
-        # Detalle de entidades
-        st.subheader("🔍 Detalle de Entidades Extraídas")
-        selected_id = st.selectbox("Selecciona un artículo para ver sus entidades:", df['id'].tolist())
-        if selected_id:
-            selected_row = df[df['id'] == selected_id].iloc[0]
-            st.json(selected_row['entidades'])
+        if df.empty:
+            st.info("Aún no hay artículos procesados. Usa el panel izquierdo para enviar una URL.")
+        else:
+            # Métricas
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Artículos", len(df))
+            col2.metric("Sentimiento Predominante", df[df['status']=='Procesado']['sentimiento'].mode()[0] if not df[df['status']=='Procesado'].empty else "N/A")
+            col3.metric("Proveedor Principal", df[df['status']=='Procesado']['provider'].mode()[0] if not df[df['status']=='Procesado'].empty else "N/A")
+            
+            st.divider()
+            
+            # Tabla de artículos
+            st.subheader("📋 Artículos Recientes")
+            
+            # Procesamos el JSON de entidades para que se vea como una lista separada por comas
+            df['entidades_str'] = df['entidades'].apply(lambda x: ", ".join(json.loads(x)) if x and x != "[]" else "")
+            
+            df_display = df[['id', 'title', 'status', 'provider', 'sentimiento', 'entidades_str', 'resumen_seo', 'processed_at']].copy()
+            df_display.columns = ['ID', 'Título', 'Estado', 'Proveedor', 'Sentimiento', 'Entidades', 'Resumen SEO', 'Fecha']
+            
+            # Formateamos la fecha para que se vea bonita
+            df_display['Fecha'] = pd.to_datetime(df_display['Fecha']).dt.strftime('%H:%M:%S')
+            
+            st.dataframe(df_display, use_container_width=True)
+            
+    except Exception as e:
+        st.error(f"Error al leer la base de datos: {e}")
+
+# Aquí está la magia: esperamos 3 segundos y recargamos la página
+time.sleep(3)
+st.rerun()
 
 except Exception as e:
     st.error(f"Error al leer la base de datos: {e}")

@@ -9,6 +9,9 @@ async def run_pipeline(article: ArticleIngestSchema):
     Orquestador principal: ejecuta todas las etapas del pipeline en orden.
     """
     print(f"\n--- 🚀 Iniciando pipeline completo para artículo {article.id} ---")
+    # Al inicio de run_pipeline, antes de la Etapa 02:
+    from app.services.db_service import save_article
+    save_article(article.id, article.model_dump(), analysis_result=None, status="Procesando")
     
     # Etapa 02
     if not validate_article(article):

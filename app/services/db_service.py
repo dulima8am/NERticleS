@@ -34,54 +34,55 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 
-def save_article(article_id: str, article_data: dict, analysis_result: dict) -> bool:
+def save_article(article_id: str, article_data: dict, analysis_result: dict = None, status: str = "Procesado") -> bool:
     """
-    Guarda un artículo procesado en la base de datos.
+    Guarda un artículo. Si analysis_result es None, lo guarda como 'Procesando'.
+    Si tiene datos, lo actualiza con los resultados del LLM.
     """
     db = SessionLocal()
     try:
-        data = analysis_result.get("result", {})
-        
-        # Validar resumen SEO (Etapa 06)
-        resumen = data.get("resumen_seo", "")
-        if len(resumen) > 160:
-            resumen = resumen[:157] + "..."
-        
-        # Buscar si ya existe (para hacer upsert)
         existing = db.query(ArticleProcessed).filter(ArticleProcessed.id == article_id).first()
         
         if existing:
-            existing.provider = analysis_result.get("provider")
-            existing.cost = analysis_result.get("cost", 0.0)
-            existing.entidades = json.dumps(data.get("entidades", []))
-            existing.sentimiento = data.get("sentimiento", "Neutral")
-            existing.resumen_seo = resumen
-            existing.processed_at = datetime.utcnow()
+            # Si ya existe, actualizamos los datos
+            if analysis_result:
+                data = analysis_result.get("result", {})
+                resumen = data.get("resumen_seo", "")
+                if len(resumen) > 160:
+                    resumen = resumen[:157] + "..."
+                
+                existing.provider = analysis_result.get("provider", existing.provider)
+                existing.cost = analysis_result.get("cost", existing.cost)
+                existing.entidades = json.dumps(data.get("entidades", []))
+                existing.sentimiento = data.get("sentimiento", "Neutral")
+                existing.resumen_seo = resumen
+                existing.status = "Procesado"
+                existing.processed_at = datetime.utcnow()
         else:
+            # Si no existe, lo creamos (puede ser el estado inicial "Procesando")
+            data = analysis_result.get("result", {}) if analysis_result else {}
             new_article = ArticleProcessed(
                 id=article_id,
                 url=str(article_data.get("url", "")),
                 title=article_data.get("title", ""),
-                provider=analysis_result.get("provider"),
-                cost=analysis_result.get("cost", 0.0),
-                entidades=json.dumps(data.get("entidades", [])),
-                sentimiento=data.get("sentimiento", "Neutral"),
-                resumen_seo=resumen,
+                provider=analysis_result.get("provider", "Pendiente") if analysis_result else "Pendiente",
+                cost=analysis_result.get("cost", 0.0) if analysis_result else 0.0,
+                entidades=json.dumps(data.get("entidades", [])) if analysis_result else "[]",
+                sentimiento=data.get("sentimiento", "En análisis") if analysis_result else "En análisis",
+                resumen_seo=data.get("resumen_seo", "") if analysis_result else "",
+                status=status,
                 processed_at=datetime.utcnow()
             )
             db.add(new_article)
         
         db.commit()
-        print(f"[DB Service] ✅ Artículo {article_id} guardado en la base de datos.")
         return True
-        
     except Exception as e:
         db.rollback()
         print(f"[DB Service] ❌ Error guardando artículo: {e}")
         return False
     finally:
         db.close()
-
 
 def get_all_articles():
     """Obtiene todos los artículos procesados (útil para el dashboard)."""
