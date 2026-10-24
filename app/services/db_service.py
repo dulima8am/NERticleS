@@ -15,7 +15,6 @@ Base = declarative_base()
 
 
 class ArticleProcessed(Base):
-    """Modelo de la tabla donde se guardan los artículos procesados."""
     __tablename__ = "articles_processed"
 
     id = Column(String, primary_key=True, index=True)
@@ -23,9 +22,9 @@ class ArticleProcessed(Base):
     title = Column(String, nullable=True)
     provider = Column(String, nullable=True)
     cost = Column(Float, default=0.0)
-    entidades = Column(Text, nullable=True)  # JSON como string
     sentimiento = Column(String, nullable=True)
     resumen_seo = Column(Text, nullable=True)
+    status = Column(String, default="Procesando") # <--- AÑADIR ESTA LÍNEA
     processed_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -34,33 +33,29 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 
-def save_article(article_id: str, article_data: dict, analysis_result: dict = None, status: str = "Procesado") -> bool:
-    """
-    Guarda un artículo. Si analysis_result es None, lo guarda como 'Procesando'.
-    Si tiene datos, lo actualiza con los resultados del LLM.
-    """
+def save_article(article_id: str, article_data: dict, analysis_result: dict = None, status: str = "Procesando") -> bool:
     db = SessionLocal()
     try:
+        data = analysis_result.get("result", {}) if analysis_result else {}
+        
+        resumen = data.get("resumen_seo", "")
+        if len(resumen) > 160:
+            resumen = resumen[:157] + "..."
+        
         existing = db.query(ArticleProcessed).filter(ArticleProcessed.id == article_id).first()
         
         if existing:
-            # Si ya existe, actualizamos los datos
+            # Si ya existe, actualizamos los datos (Fin del pipeline)
             if analysis_result:
-                data = analysis_result.get("result", {})
-                resumen = data.get("resumen_seo", "")
-                if len(resumen) > 160:
-                    resumen = resumen[:157] + "..."
-                
-                existing.provider = analysis_result.get("provider", existing.provider)
-                existing.cost = analysis_result.get("cost", existing.cost)
+                existing.provider = analysis_result.get("provider")
+                existing.cost = analysis_result.get("cost", 0.0)
                 existing.entidades = json.dumps(data.get("entidades", []))
                 existing.sentimiento = data.get("sentimiento", "Neutral")
                 existing.resumen_seo = resumen
                 existing.status = "Procesado"
                 existing.processed_at = datetime.utcnow()
         else:
-            # Si no existe, lo creamos (puede ser el estado inicial "Procesando")
-            data = analysis_result.get("result", {}) if analysis_result else {}
+            # Si no existe, lo creamos (Inicio del pipeline)
             new_article = ArticleProcessed(
                 id=article_id,
                 url=str(article_data.get("url", "")),
@@ -69,7 +64,7 @@ def save_article(article_id: str, article_data: dict, analysis_result: dict = No
                 cost=analysis_result.get("cost", 0.0) if analysis_result else 0.0,
                 entidades=json.dumps(data.get("entidades", [])) if analysis_result else "[]",
                 sentimiento=data.get("sentimiento", "En análisis") if analysis_result else "En análisis",
-                resumen_seo=data.get("resumen_seo", "") if analysis_result else "",
+                resumen_seo=resumen,
                 status=status,
                 processed_at=datetime.utcnow()
             )

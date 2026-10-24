@@ -122,8 +122,7 @@ with placeholder.container():
             col1, col2, col3 = st.columns(3)
             col1.metric("Total Artículos", len(df))
             
-            # Sentimiento más común (solo de los procesados)
-            df_procesados = df[df['sentimiento'] != 'En análisis']
+            df_procesados = df[df['status'] == 'Procesado']
             sentimiento_comun = df_procesados['sentimiento'].mode()[0] if not df_procesados.empty else "N/A"
             col2.metric("Sentimiento Predominante", sentimiento_comun)
             
@@ -132,10 +131,9 @@ with placeholder.container():
             
             st.divider()
             
-            # Tabla
-            st.subheader("📋 Artículos Recientes")
+            # Tabla (SIN el resumen)
+            st.subheader("📋 Artículos Recientes (Haz clic en una fila para ver el resumen)")
             
-            # Convertir JSON de entidades a string legible
             def parse_entities(x):
                 try:
                     if x and x != "[]":
@@ -146,11 +144,42 @@ with placeholder.container():
             
             df['entidades_str'] = df['entidades'].apply(parse_entities)
             
-            df_display = df[['id', 'title', 'provider', 'sentimiento', 'entidades_str', 'resumen_seo']].copy()
-            df_display.columns = ['ID', 'Título', 'Proveedor', 'Sentimiento', 'Entidades', 'Resumen SEO']
+            # Seleccionamos las columnas SIN el resumen_seo
+            df_display = df[['id', 'title', 'status', 'provider', 'sentimiento', 'entidades_str']].copy()
+            df_display.columns = ['ID', 'Título', 'Estado', 'Proveedor', 'Sentimiento', 'Entidades']
             
-            # Mostrar tabla
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            # Mostrar tabla interactiva
+            selection = st.dataframe(
+                df_display, 
+                use_container_width=True, 
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="single-row"
+            )
+            
+            # --- LÓGICA DE SELECCIÓN ---
+            st.divider()
+            if len(selection.selection.rows) > 0:
+                # Obtenemos el índice de la fila seleccionada
+                selected_index = selection.selection.rows[0]
+                # Buscamos el ID del artículo en el DataFrame original
+                selected_id = df_display.iloc[selected_index]['ID']
+                # Buscamos la fila completa en el df original
+                row_data = df[df['id'] == selected_id].iloc[0]
+                
+                st.subheader(f"📝 Detalle del Artículo: {row_data['title']}")
+                
+                # Mostrar resumen SEO en un párrafo bonito
+                st.info(f"**Resumen SEO:** {row_data['resumen_seo']}")
+                
+                # Opcional: Mostrar el enlace original
+                st.markdown(f"🔗 [Ver artículo original]({row_data['url']})")
+                
+                # Opcional: Mostrar entidades en formato JSON crudo (por si acaso)
+                with st.expander("Ver datos técnicos (JSON de entidades)"):
+                    st.json(row_data['entidades'])
+            else:
+                st.info("👆 Selecciona una fila de la tabla para ver el resumen SEO del artículo.")
             
     except Exception as e:
         st.error(f"Error al leer la base de datos: {e}")
