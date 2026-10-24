@@ -15,6 +15,7 @@ Base = declarative_base()
 
 
 class ArticleProcessed(Base):
+    """Modelo de la tabla donde se guardan los artículos procesados."""
     __tablename__ = "articles_processed"
 
     id = Column(String, primary_key=True, index=True)
@@ -22,9 +23,10 @@ class ArticleProcessed(Base):
     title = Column(String, nullable=True)
     provider = Column(String, nullable=True)
     cost = Column(Float, default=0.0)
-    sentimiento = Column(String, nullable=True)
-    resumen_seo = Column(Text, nullable=True)
-    status = Column(String, default="Procesando") # <--- AÑADIR ESTA LÍNEA
+    entidades = Column(Text, nullable=True)      
+    sentimiento = Column(String, nullable=True)  
+    resumen_seo = Column(Text, nullable=True)    
+    status = Column(String, default="Procesando")
     processed_at = Column(DateTime, default=datetime.utcnow)
 
 
