@@ -1,22 +1,23 @@
 FROM python:3.12-slim
 
+# Variables de entorno para Python
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Instalar dependencias del sistema
+# Instalar dependencias del sistema necesarias
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements e instalar
+# Copiar e instalar requerimientos
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar el resto del código
+# Copiar el código
 COPY . .
 
-# Exponer el puerto
-EXPOSE 8080
-
-# Comando para correr la app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Cloud Run inyecta la variable PORT. Usamos 8080 por defecto.
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
