@@ -12,3 +12,4 @@ pyjwt
 beautifulsoup4
 requests
 passlib[bcrypt]
+google-genai
