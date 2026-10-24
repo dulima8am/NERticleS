@@ -77,43 +77,50 @@ Texto: {text}
             return await self._fallback_to_ollama(text)
 
     async def _fallback_to_ollama(self, text: str) -> dict:
-        """
-        Método privado para conectar con Ollama local como respaldo.
-        """
-        print("[LLM Service] 🟢 Usando Ollama local como Fallback...")
-        
-        prompt = f"""
-Analiza el siguiente texto y devuelve ÚNICAMENTE un JSON válido con esta estructura:
-{{"entidades": [], "sentimiento": "", "resumen_seo": ""}}
-Texto: {text}
-"""
-        payload = {
-            "model": self.ollama_model,
-            "prompt": prompt,
-            "stream": False
-        }
+    print("[LLM Service] 🟢 Usando Ollama local como Fallback...")
+    
+    prompt = f"""You are a JSON generator. Respond ONLY with a valid JSON object. No explanations, no markdown, no code blocks.
 
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(self.ollama_url, json=payload, timeout=30.0)
-                response.raise_for_status()
-                data = response.json()
-                
-                raw_text = data.get("response", "").strip()
-                if raw_text.startswith("```"):
-                    raw_text = raw_text.strip("`").replace("json\n", "", 1).strip()
-                
-                return {
-                    "provider": "ollama_local",
-                    "cost": 0.0,  # Ollama es gratis
-                    "result": json.loads(raw_text)
-                }
-        except Exception as e:
+The JSON must have exactly these keys:
+- "entidades": a list of strings (named entities found in the text)
+- "sentimiento": one of "Positivo", "Negativo", or "Neutral"
+- "resumen_seo": a string summary in Spanish, maximum 160 characters
+
+Text to analyze:
+{text}
+
+JSON response:"""
+    
+    payload = {
+        "model": self.ollama_model,
+        "prompt": prompt,
+        "stream": False,
+        "format": "json"  # <-- ESTO ES CLAVE: fuerza a Ollama a devolver JSON válido
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(self.ollama_url, json=payload, timeout=60.0)
+            response.raise_for_status()
+            data = response.json()
+            
+            raw_text = data.get("response", "").strip()
+            
+            # Limpieza por si el modelo mete markdown de todos modos
+            if raw_text.startswith("```"):
+                raw_text = raw_text.strip("`").replace("json\n", "", 1).strip()
+            
             return {
-                "provider": "error",
+                "provider": "ollama_local",
                 "cost": 0.0,
-                "result": {"error": f"Fallo total: Vertex AI/AI Studio y Ollama no disponibles. Detalle: {e}"}
+                "result": json.loads(raw_text)
             }
+    except Exception as e:
+        return {
+            "provider": "error",
+            "cost": 0.0,
+            "result": {"error": f"Fallo total: AI Studio y Ollama no disponibles. Detalle: {e}"}
+        }
 
 
 # Instancia global para usarla en el pipeline
