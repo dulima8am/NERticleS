@@ -2,6 +2,33 @@
 
 Pipeline asíncrono de 7 etapas para el análisis automático de artículos periodísticos (extracción de entidades, resúmenes SEO, clasificación por sentimiento), desarrollado para el Proyecto B del curso de Fundamentos de LLMs y APIs (BSG Institute).
 
+NERticleS/
+│
+├── app/                        # Código fuente principal de la aplicación
+│   ├── api/                    # Endpoints de FastAPI (Webhook, Auth)
+│   ├── core/                   # Configuración central (Settings, Pydantic)
+│   ├── models/                 # Esquemas de datos (Pydantic)
+│   ├── pipeline/               # Lógica de las 7 etapas del pipeline
+│   ├── services/               # Servicios externos (LLM, Base de Datos)
+│   ├── utils/                  # Utilidades (Observabilidad, decoradores)
+│   └── main.py                 # Punto de entrada de la aplicación
+│
+├── docs/                       # 📁 Carpeta de Entregables (PDFs, Diagramas)
+│   ├── E1_Diagrama_Arquitectura.png
+│   ├── E2_Documento_Diseño.pdf
+│   ├── E6_Analisis_Costos.csv
+│   └── E7_Reflexion_Critica.pdf
+│
+├── scripts/                    # Scripts de prueba (testing.py)
+│
+├── .dockerignore               # Archivos ignorados por Docker
+├── .gitignore                  # Archivos ignorados por Git
+├── dashboard.py                # Frontend en Streamlit (E4)
+├── Dockerfile                  # Configuración para despliegue en Cloud Run
+├── LICENSE                     # Licencia MIT
+├── README.md                   # Documentación del proyecto
+└── requirements.txt            # Dependencias de Python
+
 ## 🏗️ Arquitectura del Pipeline
 
 El sistema implementa un flujo secuencial de 7 etapas, diseñado para procesar artículos sin bloquear al cliente:
@@ -28,6 +55,21 @@ El sistema implementa un flujo secuencial de 7 etapas, diseñado para procesar a
 *   **LLM Fallback:** Ollama (Llama 3.2)
 *   **Base de Datos:** SQLAlchemy (SQLite para desarrollo, compatible con Cloud SQL/PostgreSQL).
 *   **Despliegue:** Docker (preparado para Google Cloud Run).
+
+## 📂 Entregables del Proyecto
+
+A continuación se listan los artefactos entregables desarrollados para el Proyecto B:
+
+| Entregable | Descripción | Enlace |
+| :--- | :--- | :--- |
+| **E1 - Diagrama de Arquitectura** | Diagrama de componentes y flujos de datos. | [Ver Diagrama](./docs/E1_Diagrama_Arquitectura.png) |
+| **E2 - Documento de Diseño** | RFC técnico con justificación de decisiones y costos. | [Ver Documento](./docs/E2_Documento_Diseño.pdf) |
+| **E3 - Backend Funcional** | API REST desplegada en Cloud Run (ver instrucciones abajo). | [Código Fuente](./app) |
+| **E4 - Frontend Funcional** | Dashboard interactivo en Streamlit. | [Ver Dashboard](./dashboard.py) |
+| **E5 - Video de Presentación** | Demo funcional y explicación arquitectónica. | [Ver Video en Google Drive](https://drive.google.com/drive/folders/1S2zzhixt_1wUpZJS3PUjKB_KjMwDp175?usp=sharing) |
+| **E6 - Análisis de Costos** | Estimación de costos comparativa entre modalidades. | [Ver Análisis](./docs/E6_Analisis_Costos.csv) |
+| **E7 - Reflexión Crítica** | Análisis de qué funcionó, qué cambiarías y aprendizajes. | [Ver Reflexión](./docs/E7_Reflexion_Critica.pdf) |
+
 
 ## 🚀 Ejecución Local
 
