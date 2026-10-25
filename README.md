@@ -2,6 +2,7 @@
 
 Pipeline asíncrono de 7 etapas para el análisis automático de artículos periodísticos (extracción de entidades, resúmenes SEO, clasificación por sentimiento), desarrollado para el Proyecto B del curso de Fundamentos de LLMs y APIs (BSG Institute).
 
+```
 NERticleS/
 │
 ├── app/                        # Código fuente principal de la aplicación
@@ -14,10 +15,10 @@ NERticleS/
 │   └── main.py                 # Punto de entrada de la aplicación
 │
 ├── docs/                       # 📁 Carpeta de Entregables (PDFs, Diagramas)
-│   ├── E1_Diagrama_Arquitectura.png
-│   ├── E2_Documento_Diseño.pdf
-│   ├── E6_Analisis_Costos.csv
-│   └── E7_Reflexion_Critica.pdf
+│   ├── DiagramaDeArquitectura.png
+│   ├── Documento de Diseño.pdf
+│   ├── Análisis de Costos.xlsx
+│   └── Reflexión Crítica del Proyecto NERticleS.pdf
 │
 ├── scripts/                    # Scripts de prueba (testing.py)
 │
@@ -28,6 +29,7 @@ NERticleS/
 ├── LICENSE                     # Licencia MIT
 ├── README.md                   # Documentación del proyecto
 └── requirements.txt            # Dependencias de Python
+```
 
 ## 🏗️ Arquitectura del Pipeline
 
